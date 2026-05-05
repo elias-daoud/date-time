@@ -20,4 +20,6 @@ pub enum DecodeError {
     InvalidLslStatus,
     CoreHeaderAfterExtension,
     UnsupportedAdditionalExtensionHeaders,
+    NotPeriodHeader,
+    InvalidSignBit,
 }

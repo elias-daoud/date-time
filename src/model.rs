@@ -34,3 +34,36 @@ pub struct MomentHeader {
     pub has_uncertainty: bool,
     pub lsl_status: u8,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum Sign {
+    Positive,
+    Negative,
+}
+
+impl Sign {
+    pub fn to_binary(self) -> u8 {
+        match self {
+            Sign::Positive => 0,
+            Sign::Negative => 1,
+        }
+    }
+
+    pub fn from_binary(bit: u8) -> Option<Self> {
+        match bit {
+            0 => Some(Sign::Positive),
+            1 => Some(Sign::Negative),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PeriodHeader {
+    pub sign: Sign,
+    pub time_resolution_level: u8,
+    pub date_range_level: u8,
+    pub leap_counter_length: u8,
+    pub has_uncertainty: bool,
+    pub lsl_status: u8,
+}
