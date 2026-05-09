@@ -1,6 +1,9 @@
 pub mod arithmetic;
 pub mod body;
+pub mod db;
 pub mod errors;
+pub mod logical_ops;
 pub mod model;
 pub mod moment_header;
+pub mod notation;
 pub mod period_header;
