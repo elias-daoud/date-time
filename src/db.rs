@@ -252,6 +252,20 @@ struct DatabaseConversion {
 }
 
 fn moment_db_conversion(moment: &Moment) -> Result<DatabaseConversion, String> {
+    if moment.header.has_uncertainty
+        || moment.header.lsl_status != 0
+        || moment.negative_leap_seconds.unwrap_or(0) != 0
+        || moment.positive_leap_seconds.unwrap_or(0) != 0
+    {
+        return Ok(DatabaseConversion {
+            // Stop conversion to native types if uncertainty, lsl or leap seconds exist.
+            // Per limited implementation scope
+            native_date: None,
+            native_timestamp: None,
+            native_interval: None,
+        });
+    }
+
     let (year, month, day) = jdn_to_gregorian(moment.date_value)?;
     let date = format!("{:04}-{:02}-{:02}", year, month, day);
 
@@ -273,8 +287,6 @@ fn moment_db_conversion(moment: &Moment) -> Result<DatabaseConversion, String> {
             let time_string = format_hours_minutes(time)?;
 
             let zone_string = match moment.header.zone_level {
-                0 => "+00:00".to_string(),
-
                 1 => {
                     let zone = moment
                         .zone_value
@@ -308,6 +320,18 @@ fn moment_db_conversion(moment: &Moment) -> Result<DatabaseConversion, String> {
 }
 
 fn period_db_conversion(period: &Period) -> Result<DatabaseConversion, String> {
+    if period.header.has_uncertainty
+        || period.header.lsl_status != 0
+        || period.negative_leap_seconds.unwrap_or(0) != 0
+        || period.positive_leap_seconds.unwrap_or(0) != 0
+    {
+        return Ok(DatabaseConversion {
+            native_date: None,
+            native_timestamp: None,
+            native_interval: None,
+        });
+    }
+
     let date_mins = period
         .date_duration
         .checked_mul(24 * 60)
