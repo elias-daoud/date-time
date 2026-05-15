@@ -20,21 +20,16 @@ pub fn moment_subtract(lhs: &Moment, rhs: &Moment) -> Result<Period, String> {
 
     check_moment_compatibility(lhs, rhs)?;
 
-    let lhs_date = unsigned_to_signed(lhs.date_value, "LHS date value")?;
-    let rhs_date = unsigned_to_signed(rhs.date_value, "RHS date value")?;
+    let lhs_total = moment_to_total_units(lhs)?;
+    let rhs_total = moment_to_total_units(rhs)?;
 
-    let lhs_time = unsigned_to_signed_optional(lhs.time_value, "LHS time value")?;
-    let rhs_time = unsigned_to_signed_optional(rhs.time_value, "RHS time value")?;
+    let difference = lhs_total
+        .checked_sub(rhs_total)
+        .ok_or("Moment subtraciton overflow")?;
 
-    let date = lhs_date
-        .checked_sub(rhs_date)
-        .ok_or("Time value subtraction voerflow")?;
-
-    let time = lhs_time
-        .checked_sub(rhs_time)
-        .ok_or("Time value subtraction overflow")?;
-
-    let (sign, date_duration, time_duration) = signed_components_to_period_components(date, time)?;
+    let units = units_per_day(lhs.header.time_resolution_level)?;
+    let (sign, date_duration, time_duration) =
+        signed_total_to_period_components(difference, units)?;
 
     let uncertainty_offset = add_uncertainty(lhs.uncertainty_offset, rhs.uncertainty_offset)?;
 
@@ -87,29 +82,22 @@ fn moment_add_or_subtract_period(
             "Moment arithmetic with Period with nonzero leap seconds is future work".to_string(),
         );
     }
-    let moment_date = unsigned_to_signed(moment.date_value, "Moment date value")?;
-    let moment_time = unsigned_to_signed_optional(moment.time_value, "Moment time value")?;
 
-    let (mut period_date, mut period_time) = signed_period_components(period)?;
+    let moment_total = moment_to_total_units(moment)?;
+    let mut period_total = period_to_signed_total_units(period)?;
 
     if subtract_period {
-        period_date = period_date.checked_neg().ok_or("Date negation voerflow")?;
-        period_time = period_time.checked_neg().ok_or("Time negation overflow")?;
+        period_total = period_total
+            .checked_neg()
+            .ok_or("Period negation overflow")?;
     }
 
-    let date = moment_date
-        .checked_add(period_date)
-        .ok_or("Date addition overflow")?;
+    let result_total = moment_total
+        .checked_add(period_total)
+        .ok_or("Moment plus minus period overflow")?;
 
-    let time = moment_time
-        .checked_add(period_time)
-        .ok_or("Time addition overflow")?;
-
-    if date < 0 || time < 0 {
-        return Err(
-            "Moment result has negative parts, this is unsupported at the moment".to_string(),
-        );
-    }
+    let (date, time_value) =
+        total_units_to_moment_parts(result_total, moment.header.time_resolution_level)?;
 
     let uncertainty_offset = add_uncertainty(moment.uncertainty_offset, period.uncertainty_offset)?;
 
@@ -118,12 +106,8 @@ fn moment_add_or_subtract_period(
 
     Ok(Moment {
         header,
-        date_value: date as u128,
-        time_value: if moment.header.time_resolution_level > 0 {
-            Some(time as u128)
-        } else {
-            None
-        },
+        date_value: date,
+        time_value: time_value,
         zone_value: moment.zone_value,
         positive_leap_seconds: moment.positive_leap_seconds,
         negative_leap_seconds: moment.negative_leap_seconds,
@@ -217,24 +201,23 @@ fn zero_period_identical_moment(moment: &Moment) -> Period {
 fn period_add_or_sub(lhs: &Period, rhs: &Period, subtract_rhs: bool) -> Result<Period, String> {
     require_compatible_period(lhs, rhs)?;
 
-    let (lhs_date, lhs_time) = signed_period_components(lhs)?;
-    let (mut rhs_date, mut rhs_time) = signed_period_components(rhs)?;
+    let lhs_total = period_to_signed_total_units(lhs)?;
+    let mut rhs_total = period_to_signed_total_units(rhs)?;
 
     if subtract_rhs {
-        rhs_date = rhs_date.checked_neg().ok_or("Date negation error")?;
-        rhs_time = rhs_time.checked_neg().ok_or("Time negation error")?;
+        rhs_total = rhs_total
+            .checked_neg()
+            .ok_or("Period negation invalid or overflow")?;
     }
 
-    let date = lhs_date
-        .checked_add(rhs_date)
-        .ok_or("Date addition error")?;
+    let total = lhs_total
+        .checked_add(rhs_total)
+        .ok_or("Period arithmetic overflow")?;
 
-    let time = lhs_time
-        .checked_add(rhs_time)
-        .ok_or("Time addition error")?;
+    let units = units_per_day(lhs.header.time_resolution_level)?;
 
     let (sign, date_duration, time_duration_value) =
-        signed_components_to_period_components(date, time)?;
+        signed_total_to_period_components(total, units)?;
 
     let uncertainty_offset = add_uncertainty(lhs.uncertainty_offset, rhs.uncertainty_offset)?;
 
@@ -288,18 +271,6 @@ fn require_compatible_period(lhs: &Period, rhs: &Period) -> Result<(), String> {
     Ok(())
 }
 
-fn signed_period_components(period: &Period) -> Result<(i128, i128), String> {
-    let sign = match period.header.sign {
-        Sign::Positive => 1,
-        Sign::Negative => -1,
-    };
-
-    let date = unsigned_to_signed(period.date_duration, "Period's date duration")?;
-    let time = unsigned_to_signed_optional(period.time_duration, "Period time duration")?;
-
-    Ok((date * sign, time * sign))
-}
-
 fn unsigned_to_signed(value: u128, field_name: &str) -> Result<i128, String> {
     if value > i128::MAX as u128 {
         return Err(format!(
@@ -315,30 +286,6 @@ fn unsigned_to_signed_optional(value: Option<u128>, field_name: &str) -> Result<
         Some(value) => unsigned_to_signed(value, field_name),
         None => Ok(0),
     }
-}
-
-fn signed_components_to_period_components(
-    date: i128,
-    time: i128,
-) -> Result<(Sign, u128, u128), String> {
-    if date == 0 && time == 0 {
-        return Ok((Sign::Positive, 0, 0));
-    }
-
-    let date_sign = date.signum();
-    let time_sign = time.signum();
-
-    if date_sign != 0 && time_sign != 0 && date_sign != time_sign {
-        return Err("Mixed sign requires normalization and is future work".to_string());
-    }
-
-    let sign = if date < 0 || time < 0 {
-        Sign::Negative
-    } else {
-        Sign::Positive
-    };
-
-    Ok((sign, date.unsigned_abs(), time.unsigned_abs()))
 }
 
 fn add_uncertainty(lhs: Option<u128>, rhs: Option<u128>) -> Result<Option<u128>, String> {
@@ -424,4 +371,93 @@ fn needed_leap_counter_length(value: u128) -> Result<u8, String> {
     } else {
         Err("leap counter requires more than 7 bytes".to_string())
     }
+}
+
+fn units_per_day(time_level: u8) -> Result<i128, String> {
+    match time_level {
+        0 => Ok(1),    // date only
+        1 => Ok(24),   // hours
+        4 => Ok(1440), // minutes, preceding two levels would be 15 min & 5 min respectively but not supported here
+        5 => Ok(86400),
+        _ => Err(format!(
+            "Unsupported time resolution level {} for curent arithmetic implementation",
+            time_level
+        )),
+    }
+}
+
+fn moment_to_total_units(moment: &Moment) -> Result<i128, String> {
+    let units = units_per_day(moment.header.time_resolution_level)?;
+    let date = unsigned_to_signed(moment.date_value, "Moment date value")?;
+    let time = unsigned_to_signed_optional(moment.time_value, "Moment time  value")?;
+
+    if moment.header.time_resolution_level > 0 && time >= units {
+        return Err("Time value outside valid range, invalid Moment properties".to_string());
+    }
+
+    date.checked_mul(units)
+        .ok_or("Moment date arithmetc overflow")?
+        .checked_add(time)
+        .ok_or("Moment time artihmetic overflow".to_string())
+}
+
+fn period_to_signed_total_units(period: &Period) -> Result<i128, String> {
+    let units = units_per_day(period.header.time_resolution_level)?;
+    let date = unsigned_to_signed(period.date_duration, "Period date duration")?;
+    let time = unsigned_to_signed_optional(period.time_duration, "Period time duration")?;
+
+    let base = date
+        .checked_mul(units)
+        .ok_or("Period date overflow")?
+        .checked_add(time)
+        .ok_or("Period duration overflow")?;
+
+    match period.header.sign {
+        Sign::Positive => Ok(base),
+        Sign::Negative => base
+            .checked_neg()
+            .ok_or("Period negation overflow".to_string()),
+    }
+}
+
+fn signed_total_to_period_components(
+    total: i128,
+    units: i128,
+) -> Result<(Sign, u128, u128), String> {
+    if total == 0 {
+        return Ok((Sign::Positive, 0, 0));
+    }
+
+    let sign = if total < 0 {
+        Sign::Negative
+    } else {
+        Sign::Positive
+    };
+
+    let magnitude = if total < 0 {
+        total.checked_neg().ok_or("Magnitude overflow")? as u128
+    } else {
+        total as u128
+    };
+
+    let units = units as u128;
+
+    Ok((sign, magnitude / units, magnitude % units)) // reflecting JDN + time conversion as per design
+}
+
+fn total_units_to_moment_parts(
+    total: i128,
+    time_level: u8,
+) -> Result<(u128, Option<u128>), String> {
+    if total < 0 {
+        return Err("Moment result before supported JDN range".to_string());
+    }
+
+    let units = units_per_day(time_level)?;
+    let date = total.div_euclid(units) as u128;
+    let time = total.rem_euclid(units) as u128; // conversion to granule, for seconds this is supported but deeper resolutions aren't at the moment, u128 not enough
+
+    let time_value = if time_level > 0 { Some(time) } else { None };
+
+    Ok((date, time_value))
 }

@@ -40,10 +40,11 @@ pub fn time_byte_length(time_resolution_level: u8) -> usize {
         14 => 14,
         15 => 15, // yocto X 10 ^ -6, or 10^-30 seconds
         16 => 16,
-        17 => 17,
-        18 => 19,
-        19 => 20,
-        20 => 21, // planck time
+        // 16 byte limit, uncommenting below levels since they are future work
+        //17 => 17,
+        //18 => 19,
+        //19 => 20,
+        //20 => 21, // planck time
         _ => panic!("Invalid time resolution level"),
     }
 }
@@ -70,8 +71,9 @@ pub fn zone_bit_length(zone_level: u8) -> usize {
         6 => 88,
         7 => 108,
         8 => 128,
-        9 => 147,
-        10 => 162,
+        // uncommenting below, anything above 16 bytes not supported
+        // 9 => 147,
+        // 10 => 162,
         _ => panic!("Invalid time zone level"),
     }
 }
