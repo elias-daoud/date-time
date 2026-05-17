@@ -154,9 +154,18 @@ pub fn parse_moment_notation(input: &str) -> Result<Moment, String> {
     };
 
     let uncertainty_offset = optional_u128(&metadata, "u")?;
+    let uncertainty_offset = match uncertainty_offset {
+        Some(0) | None => None,
+        Some(value) => Some(value),
+    };
     let has_uncertainty = uncertainty_offset.is_some();
 
     let lsl_jdn = optional_u64(&metadata, "lsv")?;
+    let lsl_jdn = match lsl_jdn {
+        Some(0) | None => None,
+        Some(value) => Some(value),
+    };
+
     let lsl_status = match lsl_jdn {
         Some(jdn) => needed_lsl_status(jdn)?,
         None => 0,
@@ -238,13 +247,23 @@ pub fn parse_period_notation(input: &str) -> Result<Period, String> {
     };
 
     let uncertainty_offset = optional_u128(&metadata, "u")?;
+    let uncertainty_offset = match uncertainty_offset {
+        Some(0) | None => None,
+        Some(value) => Some(value),
+    };
     let has_uncertainty = uncertainty_offset.is_some();
 
     let lsl_jdn = optional_u64(&metadata, "lsv")?;
+    let lsl_jdn = match lsl_jdn {
+        Some(0) | None => None,
+        Some(value) => Some(value),
+    };
+
     let lsl_status = match lsl_jdn {
         Some(jdn) => needed_lsl_status(jdn)?,
         None => 0,
-    }; // The reason this is kept for Period is LSL can also be set per model design but with several
+    };
+    // The reason this is kept for Period is LSL can also be set per model design but with several
     // constraints
 
     let leap_counter_length = needed_leap_counter_length(positive_leap.max(negative_leap))?;

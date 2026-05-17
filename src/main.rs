@@ -196,49 +196,124 @@ fn main() {
         compare_periods(&period_b, &period_a),
     );
 
-    postgresql_storage_test();
-
     notation_user_input();
 }
 
 fn notation_user_input() {
-    println!("\n----- Notation user input test ----");
-    println!("Use M for Moment or P for Period");
-    println!(
-        "Moment example: @G2026-01-01T12:00+01:00 {{d:1 t:4 z:1 a:s l:0-0 u:10 lsv:2461100}}@"
-    );
-    println!("Period example: @P2DT12:00 {{d:1 t:4 l:0-0 u:10 lsv:2461100}}@");
+    loop {
+        println!("\n----- Notation input and database insertion test ----");
+        println!("Use M for Moment or P for Period, or Q to quit program");
+        println!(
+            "Moment example: @G2026-01-01T12:00+01:00 {{d:1 t:4 z:1 a:s l:37-0 u:10 lsv:2457755}}@"
+        );
+        println!("Period example: @P2DT12:00 {{d:1 t:4 l:0-0 u:10 lsv:0}}@");
 
-    let kind = read_input("Type M or P: ");
-    let notation = read_input("Notation: ");
+        let kind = read_input("Type M or P, or Q: ");
+        let kind = kind.trim().to_lowercase();
 
-    match kind.trim().to_lowercase().as_str() {
-        "m" | "moment" => match parse_moment_notation(&notation) {
-            Ok(moment) => {
-                println!("\nParsed Moment : ");
+        if kind == "q" {
+            println!("Terminating program");
+            break; // just breaks loop to end program
+        }
+
+        if kind != "m" && kind != "p" {
+            println!("Invalid input. Only M, P or Q allowed.");
+            continue;
+        }
+
+        let notation = read_input("Notation: ");
+
+        match kind.as_str() {
+            "m" => {
+                let moment = match parse_moment_notation(&notation) {
+                    Ok(moment) => moment,
+                    Err(err) => {
+                        println!("Moment parsing failure: {err}");
+                        continue;
+                    }
+                };
+
+                println!("Parsed Moment: ");
                 println!("{moment:#?}");
 
-                match moment_to_notation(&moment) {
-                    Ok(rendered) => println!("\nConverted back to notation: \n{rendered}"),
-                    Err(err) => println!("Failed to render Moment notation - {err}"),
+                let save_to_db = read_input("Insert into PostgreSQL? Y/N: ");
+
+                if save_to_db.trim().eq_ignore_ascii_case("y") {
+                    insert_moment_from_input(&moment);
                 }
             }
 
-            Err(err) => println!("Failed to parse Moment notation - {err}"),
-        },
+            "p" => {
+                let period = match parse_period_notation(&notation) {
+                    Ok(period) => period,
+                    Err(err) => {
+                        println!("Period parsing failure: {err}");
+                        continue;
+                    }
+                };
 
-        "p" | "period" => match parse_period_notation(&notation) {
-            Ok(period) => {
-                println!("\nParsed Period: ");
+                println!("Parsed Period: ");
                 println!("{period:#?}");
-                match period_to_notation(&period) {
-                    Ok(rendered) => println!("\n Converted back to Period notation:\n{rendered}"),
-                    Err(err) => println!("Failed to render period notation - {err}"),
+
+                let save_to_db = read_input("Insert into PostgreSQL? Y/N: ");
+
+                if save_to_db.trim().eq_ignore_ascii_case("y") {
+                    insert_period_from_input(&period);
                 }
             }
-            Err(err) => println!("Failed to parse Period notation - {err}"),
-        },
-        _ => println!("Unknown type"),
+
+            _ => unreachable!(),
+        }
+    }
+}
+
+fn insert_moment_from_input(moment: &Moment) {
+    let mut client = match connect() {
+        Ok(client) => client,
+        Err(err) => {
+            println!("DB connection failed : {err}");
+            return;
+        }
+    };
+
+    if let Err(err) = ensure_schema(&mut client) {
+        println!("Schema setup failed: {err}");
+        return;
+    }
+
+    match insert_moment(&mut client, moment) {
+        Ok(id) => {
+            println!("Inserted Moment with id: {id}");
+            if let Err(err) = print_row_summary(&mut client, id) {
+                println!("Failed to print Moment row summary: {err}");
+            }
+        }
+        Err(err) => println!("Failed to insert Moment: {err}"),
+    }
+}
+
+fn insert_period_from_input(period: &Period) {
+    let mut client = match connect() {
+        Ok(client) => client,
+        Err(err) => {
+            println!("DB connection failed : {err}");
+            return;
+        }
+    };
+
+    if let Err(err) = ensure_schema(&mut client) {
+        println!("Schema setup failed: {err}");
+        return;
+    }
+
+    match insert_period(&mut client, period) {
+        Ok(id) => {
+            println!("Inserted period with id: {id}");
+            if let Err(err) = print_row_summary(&mut client, id) {
+                println!("Failed to print Moment row summary: {err}");
+            }
+        }
+        Err(err) => println!("Failed to insert Period: {err}"),
     }
 }
 
@@ -430,118 +505,5 @@ fn print_moment_arithmetic_result(label: &str, result: Result<Moment, String>) {
         Err(err) => {
             println!("Arithmetic operation failed: {err}");
         }
-    }
-}
-
-// This is deliberately not open to user input, limited in scope for proof of concept because
-// anything further will add more layers of complexity and be closer to actual library
-fn postgresql_storage_test() {
-    println!(
-        "\n------------ PostgreSQL Database Conversion, Storage and Retrieval Test ------------"
-    );
-
-    let mut client = match connect() {
-        Ok(client) => client,
-        Err(err) => {
-            println!("Error on testing database: {err}");
-            return;
-        }
-    };
-
-    if let Err(err) = ensure_schema(&mut client) {
-        println!("Failed to validate schema, error on calling function: {err}");
-        return;
-    }
-
-    let db_moment_header = MomentHeader {
-        time_resolution_level: 4,
-        date_range_level: 1,
-        zone_level: 1,
-        accuracy: Accuracy::Start,
-        leap_counter_length: 0,
-        has_uncertainty: false,
-        lsl_status: 0,
-    };
-
-    let db_moment = Moment {
-        header: db_moment_header,
-        date_value: 2_461_050,
-        time_value: Some(720),
-        zone_value: Some(4),
-        positive_leap_seconds: None,
-        negative_leap_seconds: None,
-        uncertainty_offset: None,
-        lsl_jdn: None,
-    };
-
-    let db_period_header = PeriodHeader {
-        sign: Sign::Positive,
-        time_resolution_level: 4,
-        date_range_level: 1,
-        leap_counter_length: 0,
-        has_uncertainty: false,
-        lsl_status: 0,
-    };
-
-    let db_period = Period {
-        header: db_period_header,
-        date_duration: 2,
-        time_duration: Some(720),
-        positive_leap_seconds: None,
-        negative_leap_seconds: None,
-        uncertainty_offset: None,
-        lsl_jdn: None,
-    };
-
-    let moment_id = match insert_moment(&mut client, &db_moment) {
-        Ok(id) => id,
-        Err(err) => {
-            println!("Failed to insert moment: {err}");
-            return;
-        }
-    };
-
-    let loaded_moment = match load_moment(&mut client, moment_id) {
-        Ok(moment) => moment,
-        Err(err) => {
-            println!("Failed to load moment: {err}");
-            return;
-        }
-    };
-
-    println!("Inserted Moment ID: {moment_id}");
-    println!(
-        "Loaded Moment is the same as the original: {}",
-        loaded_moment == db_moment
-    );
-
-    if let Err(err) = print_row_summary(&mut client, moment_id) {
-        println!("Failed to print Moment row usmmary: {err}");
-    }
-
-    let period_id = match insert_period(&mut client, &db_period) {
-        Ok(id) => id,
-        Err(err) => {
-            println!("Failed to insert Period: {err}");
-            return;
-        }
-    };
-
-    let loaded_period = match load_period(&mut client, period_id) {
-        Ok(period) => period,
-        Err(err) => {
-            println!("Failed to load period: {err}");
-            return;
-        }
-    };
-
-    println!("Inserted period ID: {period_id}");
-    println!(
-        "Loaded Period is the same as original: {}",
-        loaded_period == db_period
-    );
-
-    if let Err(err) = print_row_summary(&mut client, period_id) {
-        println!("Failed to print period row summay: {err}");
     }
 }
