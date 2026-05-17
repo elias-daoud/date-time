@@ -2,7 +2,7 @@
 
 This repository is for the Implementation part of the bachelor's thesis "Approaching Uncertainty and Robustness in Date-Time Representation" on improving date-time handling given uncertainty and other real-world considerations such as leap second correction or precision. 
 
-The implementation is written in Rust and uses PostgreSQL for simple storage and retrieval testing. It is not intended to be a complete date-time library. It demonstrates that the proposed model can be operationally evaluated and stored in a database, while being reliably encoded and decoded.
+The implementation is written in Rust and uses PostgreSQL for simple storage and retrieval testing. It is not intended to be a complete date-time library. It demonstrates that the proposed model can be operationally evaluated and stored in a database, while being reliably encoded and decoded. It also allows the user to input data into the database using the prescribed notation.
 
 ## Functionality
 
@@ -55,7 +55,7 @@ The user will also be able to input Moment/Period data using the defined notatio
 
 ## Scope
 
-This implementation is intentionally limited. Its purpose is to demonstrate the feasibility of the proposed model, otherwise the work can quickly grow in complexity towards a production-ready date-time library. Several edge cases and broader operations are left as future work in the thesis.
+This implementation is intentionally limited. Its purpose is to demonstrate the feasibility of the proposed model, otherwise the work can quickly grow in complexity towards a production-ready date-time library. Several edge cases and broader operations are left as future work in the thesis. Only one Allen relation may hold between intervals in the implementation because per the model, several could hold resulting in an indeterminate comparison. Due to potential complexity, this is also left as future work-
 
 Furthermore, each property in a Moment/Period is limited to 16 bytes due to Rust's u128 data size, although a Moment/Period is represented as a vector of bytes `Vec<u8>` and may in total represent far larger values than 16 bytes.
 
