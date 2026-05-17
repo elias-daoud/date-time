@@ -105,7 +105,7 @@ fn main() {
 
     let moment_a = Moment {
         header: arithmetic_moment_header,
-        date_value: 2_461_000,
+        date_value: 2_461_162,
         time_value: Some(40_000),
         zone_value: Some(0),
         positive_leap_seconds: None,
@@ -116,7 +116,7 @@ fn main() {
 
     let moment_b = Moment {
         header: arithmetic_moment_header,
-        date_value: 2_461_000,
+        date_value: 2_461_162,
         time_value: Some(50_000),
         zone_value: Some(0),
         positive_leap_seconds: None,
@@ -154,36 +154,45 @@ fn main() {
         lsl_jdn: None,
     };
 
-    print_period_arithmetic_result("Period plus Period", period_add(&period_a, &period_b));
-    print_period_arithmetic_result("Period minus Period", period_subtract(&period_a, &period_b));
-    print_period_arithmetic_result("Moment minus Moment", moment_subtract(&moment_b, &moment_a));
+    print_period_arithmetic_result(
+        "Period + Period: @P2DT00:16:40 {d:1 t:5 l:0-0 u:0 lsv:0}@ + @P2DT00:08:20 {d:1 t:5 l:0-0 u:0 lsv:0}@",
+        period_add(&period_a, &period_b),
+    );
+    print_period_arithmetic_result(
+        "Period minus Period: @P2DT00:16:40 {d:1 t:5 l:0-0 u:0 lsv:0}@ - @P2DT00:08:20 {d:1 t:5 l:0-0 u:0 lsv:0}@",
+        period_subtract(&period_a, &period_b),
+    );
+    print_period_arithmetic_result(
+        "Moment minus Moment: @G2026-05-01T13:53:20 {d:1 t:5 l:0-0 u:0 lsv:0}@ - @G2026-05-01T11:06:40 {d:1 t:5 l:0-0 u:0 lsv:0}@",
+        moment_subtract(&moment_b, &moment_a),
+    );
 
     print_moment_arithmetic_result(
-        "Moment plus Period",
+        "Moment plus Period: @G2026-05-01T11:06:40 {d:1 t:5 l:0-0 u:0 lsv:0}@ + @P2DT00:16:40 {d:1 t:5 l:0-0 u:0 lsv:0}@",
         moment_add_period(&moment_a, &period_a),
     );
     print_moment_arithmetic_result(
-        "Moment minus Period",
+        "Moment minus Period: @G2026-05-01T11:06:40 {d:1 t:5 l:0-0 u:0 lsv:0}@ + @P2DT00:08:20 {d:1 t:5 l:0-0 u:0 lsv:0}@",
         moment_subtract_period(&moment_b, &period_b),
     );
 
     // Allen relation testing for logical operations. Limited
 
     print_moment_logical_operation(
-        "Moment A compared to Moment B",
+        "Moment A @G2026-05-01T11:06:40 {d:1 t:5 l:0-0 u:0 lsv:0}@ compared to Moment B @G2026-05-01T13:53:20 {d:1 t:5 l:0-0 u:0 lsv:0}@",
         compare_moments(&moment_a, &moment_b),
     );
     print_moment_logical_operation(
-        "Moment B compared to Moment A",
+        "Moment B @G2026-05-01T13:53:20 {d:1 t:5 l:0-0 u:0 lsv:0}@ compared to Moment A @G2026-05-01T11:06:40 {d:1 t:5 l:0-0 u:0 lsv:0}@",
         compare_moments(&moment_b, &moment_a),
     );
 
     print_period_logical_operation(
-        "Period A compared to Period B",
+        "Period A @P2DT00:16:40 {d:1 t:5 l:0-0 u:0 lsv:0}@ compared to Period B @P2DT00:08:20 {d:1 t:5 l:0-0 u:0 lsv:0}@",
         compare_periods(&period_a, &period_b),
     );
     print_period_logical_operation(
-        "Period B compared to Period A",
+        "Period B @P2DT00:08:20 {d:1 t:5 l:0-0 u:0 lsv:0}@ compared to Period A @P2DT00:16:40 {d:1 t:5 l:0-0 u:0 lsv:0}@",
         compare_periods(&period_b, &period_a),
     );
 
@@ -195,7 +204,9 @@ fn main() {
 fn notation_user_input() {
     println!("\n----- Notation user input test ----");
     println!("Use M for Moment or P for Period");
-    print!("Moment example: @G2026-01-01T12:00+01:00 {{d:1 t:4 z:1 a:s l:0-0 u:10 lsv:2461100}}@");
+    println!(
+        "Moment example: @G2026-01-01T12:00+01:00 {{d:1 t:4 z:1 a:s l:0-0 u:10 lsv:2461100}}@"
+    );
     println!("Period example: @P2DT12:00 {{d:1 t:4 l:0-0 u:10 lsv:2461100}}@");
 
     let kind = read_input("Type M or P: ");
@@ -219,10 +230,10 @@ fn notation_user_input() {
         "p" | "period" => match parse_period_notation(&notation) {
             Ok(period) => {
                 println!("\nParsed Period: ");
-                print!("{period:#?}");
+                println!("{period:#?}");
                 match period_to_notation(&period) {
                     Ok(rendered) => println!("\n Converted back to Period notation:\n{rendered}"),
-                    Err(err) => print!("Failed to render period notation - {err}"),
+                    Err(err) => println!("Failed to render period notation - {err}"),
                 }
             }
             Err(err) => println!("Failed to parse Period notation - {err}"),
@@ -232,7 +243,7 @@ fn notation_user_input() {
 }
 
 fn read_input(prompt: &str) -> String {
-    print!("{prompt}");
+    println!("{prompt}");
     io::stdout().flush().expect("Failed to flush stdout");
     let mut input = String::new();
     io::stdin()
@@ -253,7 +264,7 @@ fn print_moment_logical_operation(
             println!("Moment relation: {relation:#?}");
         }
         Err(err) => {
-            print!("Logical comparison has failed: {err}");
+            println!("Logical comparison has failed: {err}");
         }
     }
 }
@@ -269,7 +280,7 @@ fn print_period_logical_operation(
             println!("Period relation: {relation:#?}");
         }
         Err(err) => {
-            print!("Logical comparison has failed: {err}");
+            println!("Logical comparison has failed: {err}");
         }
     }
 }
@@ -295,8 +306,8 @@ fn print_encoded_moment_header(label: &str, header: &MomentHeader) {
     match decode_moment_header(&bytes) {
         Ok((decoded, consumed)) => {
             println!("\nDecoded header: ");
-            print!("{decoded:#?}\n");
-            print!("\nNumber of consumed header bytes: {consumed}\n");
+            println!("{decoded:#?}\n");
+            println!("\nNumber of consumed header bytes: {consumed}\n");
         }
         Err(err) => {
             println!("Failed to decode header: {:?}", err);
@@ -325,8 +336,8 @@ fn print_encoded_period_header(label: &str, header: &PeriodHeader) {
     match decode_period_header(&bytes) {
         Ok((decoded, consumed)) => {
             println!("\nDecoded header: ");
-            print!("{decoded:#?}\n");
-            print!("\nNumber of consumed header bytes: {consumed}\n");
+            println!("{decoded:#?}\n");
+            println!("\nNumber of consumed header bytes: {consumed}\n");
         }
         Err(err) => {
             println!("Failed to decode header: {:?}", err);
@@ -355,8 +366,8 @@ fn print_encoded_moment_body(label: &str, moment: &Moment) {
     match decode_moment_body(&moment.header, &bytes) {
         Ok((decoded, consumed)) => {
             println!("\nDecoded Moment: ");
-            print!("{decoded:#?}\n");
-            print!("\nNumber of consumed body bytes: {consumed}\n");
+            println!("{decoded:#?}\n");
+            println!("\nNumber of consumed body bytes: {consumed}\n");
         }
         Err(err) => {
             println!("Failed to decode moment body: {:?}", err);
@@ -385,8 +396,8 @@ fn print_encoded_period_body(label: &str, period: &Period) {
     match decode_period_body(&period.header, &bytes) {
         Ok((decoded, consumed)) => {
             println!("\nDecoded period: ");
-            print!("{decoded:#?}\n");
-            print!("\nNumber of consumed body bytes: {consumed}\n");
+            println!("{decoded:#?}\n");
+            println!("\nNumber of consumed body bytes: {consumed}\n");
         }
         Err(err) => {
             println!("Failed to decode period body: {:?}", err);
@@ -403,7 +414,7 @@ fn print_period_arithmetic_result(label: &str, result: Result<Period, String>) {
             println!("{period:#?}");
         }
         Err(err) => {
-            print!("Arithmetic operation failed: {err}");
+            println!("Arithmetic operation failed: {err}");
         }
     }
 }
@@ -417,7 +428,7 @@ fn print_moment_arithmetic_result(label: &str, result: Result<Moment, String>) {
             println!("{moment:#?}");
         }
         Err(err) => {
-            print!("Arithmetic operation failed: {err}");
+            println!("Arithmetic operation failed: {err}");
         }
     }
 }
